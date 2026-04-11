@@ -5,10 +5,9 @@ import MapKit
 struct LocationPickerView: View {
     @ObservedObject var locationManager: LocationManager
     var onLocationSelected: () -> Void
+    let showsNavigationWrapper: Bool
     @State private var searchText = ""
-    @State private var searchResults: [MKLocalSearchCompletion] = []
-    @State private var searchedLocations: [(name: String, coordinate: CLLocationCoordinate2D)] = []
-    private let searchCompleter = MKLocalSearchCompleter()
+    @StateObject private var searchManager = SearchCompleterManager()
     
     let locations: [(name: String, coordinate: CLLocationCoordinate2D)] = [
         ("New York", CLLocationCoordinate2D(latitude: 40.7128, longitude: -74.0060)),
@@ -23,70 +22,87 @@ struct LocationPickerView: View {
         ("San Jose", CLLocationCoordinate2D(latitude: 37.3382, longitude: -121.8863))
     ]
     
+    init(
+        locationManager: LocationManager,
+        onLocationSelected: @escaping () -> Void,
+        showsNavigationWrapper: Bool = true
+    ) {
+        self.locationManager = locationManager
+        self.onLocationSelected = onLocationSelected
+        self.showsNavigationWrapper = showsNavigationWrapper
+    }
+
     var body: some View {
-        NavigationView {
-            List {
-                // Current Location Section
-                Section(header: Text("Current Location")) {
-                    Button(action: {
-                        locationManager.requestLocation()
-                        onLocationSelected()
-                    }) {
-                        HStack {
-                            Image(systemName: "location.fill")
-                            Text("Use Current Location")
-                        }
-                        .foregroundColor(.white)
-                    }
-                }
-                
-                // Search Section
-                Section(header: Text("Search")) {
-                    TextField("Search for a place...", text: $searchText)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .foregroundColor(.white)
-                        .accentColor(.white)
-                        .submitLabel(.search)
-                        .onSubmit {
-                            performSearch()
-                        }
-                    
-                    if !searchResults.isEmpty {
-                        ForEach(searchResults, id: \.self) { result in
-                            Button(action: {
-                                addSearchResultToLocations(result)
-                            }) {
-                                VStack(alignment: .leading) {
-                                    Text(result.title)
-                                        .foregroundColor(.white)
-                                    Text(result.subtitle)
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
+        Group {
+            if showsNavigationWrapper {
+                NavigationStack {
+                    pickerContent
+                        .navigationTitle("Select Location")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button("Done") {
+                                    onLocationSelected()
                                 }
                             }
                         }
-                    }
                 }
-                
-                // Searched Locations Section
-                if !searchedLocations.isEmpty {
-                    Section(header: Text("Search Results")) {
-                        ForEach(searchedLocations, id: \.name) { location in
-                            Button(action: {
-                                selectLocation(location)
-                            }) {
-                                Text(location.name)
+            } else {
+                pickerContent
+            }
+        }
+        .onChange(of: searchText) { _, newValue in
+            searchManager.setQuery(newValue)
+        }
+    }
+
+    private var pickerContent: some View {
+        List {
+            Section(header: Text("Current Location")) {
+                Button(action: {
+                    locationManager.requestLocation()
+                    onLocationSelected()
+                }) {
+                    HStack {
+                        Image(systemName: "location.fill")
+                        Text("Use Current Location")
+                    }
+                    .foregroundColor(.white)
+                }
+            }
+
+            Section(header: Text("Search")) {
+                TextField("Search for a place...", text: $searchText)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .foregroundColor(.white)
+                    .accentColor(.white)
+                    .submitLabel(.search)
+                    .onSubmit {
+                        performSearch()
+                    }
+
+                if !searchManager.searchResults.isEmpty {
+                    ForEach(searchManager.searchResults, id: \.self) { result in
+                        Button(action: {
+                            addSearchResultToLocations(result)
+                        }) {
+                            VStack(alignment: .leading) {
+                                Text(result.title)
                                     .foregroundColor(.white)
+                                Text(result.subtitle)
+                                    .font(.caption)
+                                    .foregroundColor(.gray)
                             }
                         }
                     }
                 }
-                
-                // Popular Cities Section
-                Section(header: Text("Popular Cities")) {
-                    ForEach(locations, id: \.name) { location in
+            }
+
+            if !locationManager.savedLocations.isEmpty {
+                Section(header: Text("Saved Locations")) {
+                    ForEach(locationManager.savedLocations) { location in
                         Button(action: {
-                            selectLocation(location)
+                            selectLocation((name: location.name, coordinate: location.coordinate))
                         }) {
                             Text(location.name)
                                 .foregroundColor(.white)
@@ -94,25 +110,22 @@ struct LocationPickerView: View {
                     }
                 }
             }
-            .preferredColorScheme(.dark)
-            .navigationTitle("Select Location")
-            .navigationBarItems(trailing: Button("Done") {
-                onLocationSelected()
-            })
-        }
-        .onAppear {
-            setupSearchCompleter()
-        }
-        .onChange(of: searchText) { _, newValue in
-            if !newValue.isEmpty {
-                searchCompleter.queryFragment = newValue
+
+            Section(header: Text("Popular Cities")) {
+                ForEach(locations, id: \.name) { location in
+                    Button(action: {
+                        selectLocation(location)
+                    }) {
+                        Text(location.name)
+                            .foregroundColor(.white)
+                    }
+                }
             }
         }
+        .preferredColorScheme(.dark)
     }
     
-    private func setupSearchCompleter() {
-        searchCompleter.delegate = SearchCompleterDelegate(searchResults: $searchResults)
-    }
+
     
     private func addSearchResultToLocations(_ result: MKLocalSearchCompletion) {
         let searchRequest = MKLocalSearch.Request(completion: result)
@@ -123,12 +136,9 @@ struct LocationPickerView: View {
             
             DispatchQueue.main.async {
                 let locationName = "\(result.title), \(result.subtitle)"
-                let newLocation = (name: locationName, coordinate: coordinate)
-                if !searchedLocations.contains(where: { $0.name == locationName }) {
-                    searchedLocations.insert(newLocation, at: 0)
-                }
+                locationManager.addSavedLocation(name: locationName, coordinate: coordinate)
                 searchText = ""
-                searchResults = []
+                searchManager.clearResults()
             }
         }
     }
@@ -136,17 +146,20 @@ struct LocationPickerView: View {
     private func selectLocation(_ location: (name: String, coordinate: CLLocationCoordinate2D)) {
         // Extract just the city name from the full location string
         let cityName = location.name.components(separatedBy: ",")[0].trimmingCharacters(in: .whitespaces)
+        let selectedLocation = CLLocation(
+            latitude: location.coordinate.latitude,
+            longitude: location.coordinate.longitude
+        )
         
         locationManager.setCustomLocation(
             name: cityName,
-            location: CLLocation(latitude: location.coordinate.latitude, 
-                               longitude: location.coordinate.longitude)
+            location: selectedLocation
         )
-        
+
         Task {
-            await locationManager.fetchWeather(for: locationManager.location!)
+            await locationManager.fetchWeather(for: selectedLocation)
         }
-        
+
         onLocationSelected()
     }
     
@@ -172,35 +185,49 @@ struct LocationPickerView: View {
                         location.country
                     ].compactMap { $0 }.joined(separator: ", ")
                     
-                    let newLocation = (
-                        name: locationName,
-                        coordinate: location.coordinate
-                    )
-                    
-                    if !searchedLocations.contains(where: { $0.name == locationName }) {
-                        searchedLocations.insert(newLocation, at: 0)
-                    }
+                    locationManager.addSavedLocation(name: locationName, coordinate: location.coordinate)
                     searchText = ""
-                    searchResults = []
+                    searchManager.clearResults()
                 }
             }
         }
     }
 }
 
-// Search Completer Delegate
-class SearchCompleterDelegate: NSObject, MKLocalSearchCompleterDelegate, ObservableObject {
-    @Binding var searchResults: [MKLocalSearchCompletion]
+final class SearchCompleterManager: NSObject, MKLocalSearchCompleterDelegate, ObservableObject {
+    @Published var searchResults: [MKLocalSearchCompletion] = []
     
-    init(searchResults: Binding<[MKLocalSearchCompletion]>) {
-        _searchResults = searchResults
+    private lazy var completer: MKLocalSearchCompleter = {
+        let c = MKLocalSearchCompleter()
+        c.delegate = self
+        return c
+    }()
+
+    override init() {
+        super.init()
     }
-    
+
+    func setQuery(_ query: String) {
+        if query.isEmpty {
+            clearResults()
+        } else {
+            completer.queryFragment = query
+        }
+    }
+
+    func clearResults() {
+        searchResults = []
+    }
+
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
-        searchResults = completer.results
+        DispatchQueue.main.async {
+            self.searchResults = completer.results
+        }
     }
     
     func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
-        print("Search failed with error: \(error.localizedDescription)")
+        DispatchQueue.main.async {
+            print("Search failed with error: \(error.localizedDescription)")
+        }
     }
-} 
+}

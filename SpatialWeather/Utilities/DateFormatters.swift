@@ -7,30 +7,76 @@
 import Foundation
 
 struct DateFormatters {
-    static func formatHour(_ date: Date) -> String {
+    static var timeZone: TimeZone = .autoupdatingCurrent {
+        didSet {
+            hourFormatter.timeZone = timeZone
+            weekdayFormatter.timeZone = timeZone
+            abbreviatedWeekdayFormatter.timeZone = timeZone
+            shortTimeFormatter.timeZone = timeZone
+            monthDayFormatter.timeZone = timeZone
+        }
+    }
+
+    private static let hourFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "ha"
-        return formatter.string(from: date)
-    }
-    
-    static func formatDay(_ date: Date) -> String {
+        formatter.timeZone = timeZone
+        return formatter
+    }()
+
+    private static let weekdayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE"
-        return formatter.string(from: date)
+        formatter.timeZone = timeZone
+        return formatter
+    }()
+
+    private static let abbreviatedWeekdayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E"
+        formatter.timeZone = timeZone
+        return formatter
+    }()
+
+    private static let shortTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        formatter.timeZone = timeZone
+        return formatter
+    }()
+
+    private static let monthDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E, MMM d"
+        formatter.timeZone = timeZone
+        return formatter
+    }()
+
+    static func formatHour(_ date: Date) -> String {
+        hourFormatter.string(from: date)
+    }
+
+    static func formatDay(_ date: Date) -> String {
+        weekdayFormatter.string(from: date)
+    }
+
+    static func formatAbbreviatedDay(_ date: Date) -> String {
+        abbreviatedWeekdayFormatter.string(from: date)
+    }
+
+    static func formatShortTime(_ date: Date) -> String {
+        shortTimeFormatter.string(from: date)
+    }
+
+    static func formatMonthDay(_ date: Date) -> String {
+        monthDayFormatter.string(from: date)
     }
 }
 
-// Helper Functions
-
-
 func formatHour(_ date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "ha"
-    return formatter.string(from: date)
+    DateFormatters.formatHour(date)
 }
 
 func formatDay(_ date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "EEEE"
-    return formatter.string(from: date)
+    DateFormatters.formatDay(date)
 }

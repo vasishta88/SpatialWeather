@@ -5,7 +5,6 @@
 //  Created by Vasishta Atmuri on 2024-11-14.
 //
 import SwiftUI
-import RealityKit
 import WeatherKit
 
 struct WeatherSymbol: View {
@@ -15,21 +14,27 @@ struct WeatherSymbol: View {
     var height: CGFloat?
     let use3D: Bool
     let isNighttime: Bool
+    let season: Season
     
-    init(icon: String, condition: WeatherKit.WeatherCondition, width: CGFloat? = nil, height: CGFloat? = nil, use3D: Bool = false, isNighttime: Bool = false) {
+    init(icon: String, condition: WeatherKit.WeatherCondition, width: CGFloat? = nil, height: CGFloat? = nil, use3D: Bool = false, isNighttime: Bool = false, season: Season = .summer) {
         self.icon = icon
         self.condition = condition
         self.width = width
         self.height = height
         self.use3D = use3D
         self.isNighttime = isNighttime
+        self.season = season
     }
     
     var body: some View {
         if use3D {
             WeatherSymbol3D(
-                condition: condition,
-                isNighttime: isNighttime
+                splineState: SplineWeatherState(
+                    family: condition.simplifiedFamily,
+                    season: season,
+                    isNighttime: isNighttime
+                ),
+                scenePlaybackMode: .active
             )
             .frame(maxWidth: width, maxHeight: height)
         } else {

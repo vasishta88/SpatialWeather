@@ -8,7 +8,7 @@ import Foundation
 import WeatherKit
 
 struct DailyForecast: Identifiable {
-    let id = UUID()
+    var id: Date { date }
     let date: Date
     let highTemperature: Double
     let lowTemperature: Double

@@ -9,8 +9,10 @@ import WeatherKit
 
 
 struct HourlyForecast: Identifiable {
-    let id = UUID()
+    var id: Date { date }
     let date: Date
     let temperature: Double
+    let feelsLike: Double
+    let precipitationChance: Double
     let condition: WeatherKit.WeatherCondition
 }
